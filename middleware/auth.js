@@ -2,7 +2,6 @@ const jwt = require('jsonwebtoken');
 const { pool } = require('../db');
 const { jwtSecret } = require('../config');
 const { hashAppToken } = require('../utils/tokens');
-const { authRateLimit } = require('../utils/authRateLimit');
 
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -113,7 +112,6 @@ async function canAccessChat(chatId, userId) {
 module.exports = {
   authenticateToken,
   blockApps,
-  authRateLimit,
   getSpaceMembership,
   requireSpaceAccess,
   canAccessChat

@@ -8,7 +8,7 @@ const {
 const { hashPassword, comparePassword, DUMMY_HASH } = require('../hash');
 const { pool } = require('../db');
 const { jwtSecret, webauthnOrigins, webauthnRpIDForOrigin } = require('../config');
-const { authenticateToken, authRateLimit, blockApps } = require('../middleware/auth');
+const { authenticateToken, blockApps } = require('../middleware/auth');
 const { normalizeUsername, issueToken: issueTokenRaw } = require('../utils/tokens');
 const { verifyHCaptcha } = require('../utils/hcaptcha');
 const {
@@ -31,7 +31,7 @@ router.get('/hcaptcha', (req, res) => {
   });
 });
 
-router.post('/register', authRateLimit, async (req, res) => {
+router.post('/register', async (req, res) => {
   const username = normalizeUsername(req.body?.username);
   const password = req.body?.password;
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
@@ -95,7 +95,7 @@ router.post('/register', authRateLimit, async (req, res) => {
   }
 });
 
-router.post('/login', authRateLimit, async (req, res) => {
+router.post('/login', async (req, res) => {
   const username = normalizeUsername(req.body?.username);
   const password = req.body?.password;
   const hcaptchaToken = typeof req.body?.hcaptcha === 'string' ? req.body.hcaptcha : null;
@@ -218,7 +218,7 @@ router.post('/passkey/register/verify', authenticateToken, blockApps, async (req
   }
 });
 
-router.post('/passkey/login/options', authRateLimit, async (req, res) => {
+router.post('/passkey/login/options', async (req, res) => {
   const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
   if (!username) {
     return res.status(400).json({ error: 'username is required' });
@@ -259,7 +259,7 @@ router.post('/passkey/login/options', authRateLimit, async (req, res) => {
   }
 });
 
-router.post('/passkey/login/verify', authRateLimit, async (req, res) => {
+router.post('/passkey/login/verify', async (req, res) => {
   const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
   if (!username || !req.body?.response) {
     return res.status(400).json({ error: 'username and passkey response are required' });
