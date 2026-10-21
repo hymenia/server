@@ -63,6 +63,8 @@ firewall when needed.
 Run the server unit tests with `pnpm test`. They use Node's built-in test runner
 and do not require a running database.
 
+> Tests don't exist for now as they aren't finished and I probably won't finish them any time soon
+
 Attachments are limited to 20 MB, written to `ATTACHMENTS_DIR` when set (or
 `server/uploads` by default), and linked to messages in PostgreSQL.
 
