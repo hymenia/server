@@ -1,3 +1,7 @@
+![The Hymenia Banner](https://hymenia.dotun.cc/ghbanner.png)
+
+---
+
 # Hymenia Server
 
 The backend for Hymenia, a new open-source BYOC (bring your own client) platform for messaging and VoIP calls.
