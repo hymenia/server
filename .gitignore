@@ -1,0 +1,5 @@
+.env
+.env.bak
+node_modules/
+uploads/
+utils/disposable_domains.txt

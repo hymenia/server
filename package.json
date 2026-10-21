@@ -1,0 +1,23 @@
+{
+  "name": "hymenia-server",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "packageManager": "pnpm@12.15.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file=.env server.js",
+    "db:reset": "node --env-file=.env reset-db.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "^14.0.1",
+    "bcryptjs": "^2.4.3",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "livekit-server-sdk": "^2.19.1",
+    "nodemailer": "^10.1.0",
+    "pg": "^8.12.0",
+    "ws": "^8.18.0"
+  }
+}
