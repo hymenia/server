@@ -684,19 +684,39 @@ create index if not exists messages_sender_idx
 -- =========================================================
 -- These are optional
 
-alter table spaces
-  add constraint spaces_visibility_check
-  check (visibility in ('private', 'public'))
-  not valid;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'spaces_visibility_check'
+      and conrelid = 'public.spaces'::regclass
+  ) then
+    alter table public.spaces
+      add constraint spaces_visibility_check
+      check (visibility in ('private', 'public'))
+      not valid;
+  end if;
 
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'space_invites_max_uses_check'
+      and conrelid = 'public.space_invites'::regclass
+  ) then
+    alter table public.space_invites
+      add constraint space_invites_max_uses_check
+      check (max_uses is null or max_uses > 0)
+      not valid;
+  end if;
 
-alter table space_invites
-  add constraint space_invites_max_uses_check
-  check (max_uses is null or max_uses > 0)
-  not valid;
-
-
-alter table space_invites
-  add constraint space_invites_uses_count_check
-  check (uses_count >= 0)
-  not valid;
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'space_invites_uses_count_check'
+      and conrelid = 'public.space_invites'::regclass
+  ) then
+    alter table public.space_invites
+      add constraint space_invites_uses_count_check
+      check (uses_count >= 0)
+      not valid;
+  end if;
+end
+$$;
