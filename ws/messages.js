@@ -19,15 +19,16 @@ async function createAndBroadcastMessage(opts, db = pool) {
       'select display_name, global_roles from users where id = $1',
       [senderId]
     );
-    const senderDisplayName = senderResult.rows[0]?.display_name || null;
+    const senderDisplayName = opts.senderDisplayName || senderResult.rows[0]?.display_name || null;
     const senderGlobalRoles = senderResult.rows[0]?.global_roles || [];
 
     let replyTo = null;
     if (replyToId) {
       const replyRes = await client.query(
-        `select m.id, m.content, u.username as sender
+        `select m.id, m.content, coalesce(w.name, u.username) as sender
          from messages m
          left join users u on u.id = m.sender_id
+         left join webhooks w on w.id = m.webhook_id
          where m.id = $1 and m.chat_id = $2`,
         [replyToId, chatId]
       );
@@ -40,8 +41,19 @@ async function createAndBroadcastMessage(opts, db = pool) {
     }
 
     const insertRes = await client.query(
-      'insert into messages (sender_id, chat_id, content, reply_to_id) values ($1, $2, $3, $4) returning id, created_at',
-      [senderId, chatId, content, replyTo ? replyTo.id : null]
+      `insert into messages
+       (sender_id, chat_id, content, reply_to_id, webhook_id, sender_name_override, sender_avatar_url_override)
+       values ($1, $2, $3, $4, $5, $6, $7)
+       returning id, created_at`,
+      [
+        senderId,
+        chatId,
+        content,
+        replyTo ? replyTo.id : null,
+        opts.webhookId || null,
+        opts.senderNameOverride || null,
+        opts.senderAvatarUrl || null
+      ]
     );
     const saved = insertRes.rows[0];
     const attachmentRows = [];
@@ -60,6 +72,7 @@ async function createAndBroadcastMessage(opts, db = pool) {
       id: saved.id,
       sender: senderUsername,
       sender_display_name: senderDisplayName,
+      sender_avatar_url: opts.senderAvatarUrl || null,
       sender_global_roles: senderGlobalRoles,
       sender_is_bot: isSenderApp,
       chat_id: chatId,

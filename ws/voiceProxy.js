@@ -52,7 +52,8 @@ function pipe(clientWs, req, route) {
     }
   });
 
-  upstream.on('error', () => {
+  upstream.on('error', (err) => {
+    console.error(`[livekit] ${route.listenPath} upstream connection failed:`, err.code || err.message);
     if (!upstreamOpen) {
       safeClose(clientWs, 1011, 'livekit unavailable');
     }

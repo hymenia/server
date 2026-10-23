@@ -9,6 +9,7 @@ const { router: appsRouter, applicationsRouter } = require('./routes/apps');
 const webhooksRouter = require('./routes/webhooks');
 const { router: chatsRouter, getMessagesHandler } = require('./routes/chats');
 const voiceRouter = require('./routes/voice');
+const instanceRouter = require('./routes/instance');
 const { liveKitValidateRouter } = require('./ws/voiceProxy');
 
 const app = express();
@@ -29,7 +30,12 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '16kb' }));
+app.use(express.json({
+  limit: '1mb',
+  verify(req, res, buffer) {
+    req.rawBody = Buffer.from(buffer);
+  }
+}));
 
 app.get('/health', (req, res) => {
   res.json({
@@ -49,6 +55,7 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.use(instanceRouter);
 app.use('/api/auth', authRouter);
 app.use('/api', accountRouter);
 app.use('/api/spaces', spacesRouter);

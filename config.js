@@ -1,6 +1,26 @@
 const fs = require('fs');
 
 const port = Number(process.env.PORT) || 9070;
+const instanceName = (process.env.INSTANCE_NAME || 'Hymenia').trim().slice(0, 100) || 'Hymenia';
+
+let publicUrl = null;
+if (process.env.PUBLIC_URL) {
+  let parsedPublicUrl;
+  try {
+    parsedPublicUrl = new URL(process.env.PUBLIC_URL);
+  } catch {
+    throw new Error('PUBLIC_URL must be a valid http or https origin');
+  }
+  if (!['http:', 'https:'].includes(parsedPublicUrl.protocol)
+      || parsedPublicUrl.username
+      || parsedPublicUrl.password
+      || parsedPublicUrl.pathname !== '/'
+      || parsedPublicUrl.search
+      || parsedPublicUrl.hash) {
+    throw new Error('PUBLIC_URL must be a valid http or https origin');
+  }
+  publicUrl = parsedPublicUrl.origin;
+}
 
 let jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret) {
@@ -29,6 +49,8 @@ function webauthnRpIDForOrigin(origin) {
 
 module.exports = {
   port,
+  instanceName,
+  publicUrl,
   jwtSecret,
   certPath,
   keyPath,

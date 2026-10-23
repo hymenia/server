@@ -1,6 +1,17 @@
 create extension if not exists pgcrypto;
 
 
+create table if not exists instance_id (
+  singleton boolean primary key default true check (singleton),
+  instance_id uuid not null default gen_random_uuid(),
+  created_at timestamptz not null default now()
+);
+
+insert into instance_id (singleton)
+values (true)
+on conflict (singleton) do nothing;
+
+
 -- =========================================================
 
 create table if not exists users (
@@ -627,6 +638,47 @@ create index if not exists webhooks_app_lookup
 
 create index if not exists webhooks_chat_lookup
   on webhooks (chat_id);
+
+alter table messages
+  add column if not exists webhook_id uuid;
+
+alter table messages
+  add column if not exists sender_name_override text;
+
+alter table messages
+  add column if not exists sender_avatar_url_override text;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'messages_webhook_id_fkey'
+      and conrelid = 'public.messages'::regclass
+  ) then
+    alter table public.messages
+      add constraint messages_webhook_id_fkey
+      foreign key (webhook_id)
+      references public.webhooks(id)
+      on delete set null;
+  end if;
+end
+$$;
+
+create index if not exists messages_webhook_lookup
+  on messages (webhook_id);
+
+create table if not exists webhook_deliveries (
+  webhook_id uuid not null
+    references webhooks(id)
+    on delete cascade,
+  delivery_id text not null,
+  processed_at timestamptz not null default now(),
+  primary key (webhook_id, delivery_id)
+);
+
+create index if not exists webhook_deliveries_processed_idx
+  on webhook_deliveries (processed_at);
 
 -- =========================================================
 

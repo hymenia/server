@@ -32,11 +32,16 @@ the scheme and port. For a Tauri desktop client, include `tauri://localhost`
 and `http://tauri.localhost` so packaged apps can use passkeys on Linux, macOS,
 and Windows. Set the browser origin and RP ID for your deployed website as well.
 
+Set `INSTANCE_NAME` and `PUBLIC_URL` to describe this server. `PUBLIC_URL` must
+be its public HTTP or HTTPS origin. The server creates a stable instance ID in
+the database on first startup and publishes this information at
+`/.well-known/hymenia`. Keep the database when backing up or moving an instance
+to preserve its ID.
+
 3. Apply schema
 
-The server applies `schema.sql` as a single migration when it starts.
-Migration failures stop startup. Applied migrations are checksum-verified,
-so do not edit `schema.sql` after deployment.
+The server applies `schema.sql` each time it starts. Keep its statements safe to
+run repeatedly when changing the schema.
 
 4. Start server
 

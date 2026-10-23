@@ -12,6 +12,7 @@
 
 ## Endpoints
 
+- `GET /.well-known/hymenia`*
 - `GET /api/auth/hcaptcha`*
 - `POST /api/auth/register`*
 - `POST /api/auth/login`*
@@ -62,7 +63,9 @@
 - `POST /api/apps/:appId/webhooks`
 - `GET /api/apps/:appId/webhooks`
 - `DELETE /api/apps/:appId/webhooks/:webhookId`
-- `POST /api/webhooks/:token`*
+- `POST /api/webhooks/:webhookId/:token`*
+- `PATCH /api/webhooks/:webhookId/:token/messages/:messageId`*
+- `DELETE /api/webhooks/:webhookId/:token/messages/:messageId`*
 - `POST /api/voice/token`
 - `GET /health`*
 - `GET /livekit/rtc/v1/validate`*
@@ -72,3 +75,7 @@
 - `ws://127.0.0.1:9070/livekit/rtc`
 
 All HTTP endpoints except the ones marked with a * require a bearer or app token.
+
+### Webhooks
+
+uhh hazel can fill this one out 😂
