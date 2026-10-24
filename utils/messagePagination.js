@@ -3,7 +3,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 function buildMessagesPageQuery(chatId, beforeAt, beforeId) {
   const params = [chatId];
-  let where = 'where m.chat_id = $1';
+  let where = 'where m.chat_id = $1 and m.deleted_at is null';
 
   if (beforeAt) {
     params.push(beforeAt, beforeId);
@@ -13,7 +13,7 @@ function buildMessagesPageQuery(chatId, beforeAt, beforeId) {
   // so the client can know if there's more messages to load
   params.push(MESSAGES_PAGE_SIZE + 1);
   return {
-    text: `select m.id, u.username as sender,
+    text: `select m.id, m.sender_id, u.username as sender,
               coalesce(m.sender_name_override, w.name, u.display_name, u.username) as sender_display_name,
               m.sender_avatar_url_override as sender_avatar_url,
               u.is_bot as sender_is_bot, u.global_roles as sender_global_roles,

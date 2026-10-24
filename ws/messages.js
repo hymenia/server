@@ -70,6 +70,7 @@ async function createAndBroadcastMessage(opts, db = pool) {
 
     payload = {
       id: saved.id,
+      sender_id: senderId,
       sender: senderUsername,
       sender_display_name: senderDisplayName,
       sender_avatar_url: opts.senderAvatarUrl || null,
