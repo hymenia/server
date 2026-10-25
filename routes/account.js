@@ -69,13 +69,23 @@ router.get('/profile/:username', async (req, res) => {
 router.get('/account/profile', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      'select id, username, display_name, bio, avatar_url, global_roles from users where id = $1',
+      'select id, username, display_name, bio, avatar_url, global_roles, email, email_verified_at from users where id = $1',
       [req.user.id]
     );
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'user not found' });
     }
-    res.json(result.rows[0]);
+    const row = result.rows[0];
+    res.json({
+      id: row.id,
+      username: row.username,
+      display_name: row.display_name,
+      bio: row.bio,
+      avatar_url: row.avatar_url,
+      global_roles: row.global_roles,
+      email: row.email,
+      email_verified: !!row.email_verified_at
+    });
   } catch (e) {
     console.error('failed to fetch profile', e);
     res.status(500).json({ error: 'failed to fetch profile' });

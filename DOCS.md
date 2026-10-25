@@ -75,6 +75,7 @@
 - `ws://127.0.0.1:9070/livekit/rtc`
 
 All HTTP endpoints except the ones marked with a * require a bearer or app token.
+Creating/joining spaces, sending messages, and uploading attachments require verified email for user accounts.
 
 ### Webhooks
 

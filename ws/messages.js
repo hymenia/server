@@ -16,11 +16,17 @@ async function createAndBroadcastMessage(opts, db = pool) {
     await client.query('begin');
 
     const senderResult = await client.query(
-      'select display_name, global_roles from users where id = $1',
+      'select display_name, global_roles, email_verified_at from users where id = $1',
       [senderId]
     );
     const senderDisplayName = opts.senderDisplayName || senderResult.rows[0]?.display_name || null;
     const senderGlobalRoles = senderResult.rows[0]?.global_roles || [];
+
+    if (!isSenderApp && !opts.webhookId && !senderResult.rows[0]?.email_verified_at) {
+      const err = new Error('email verification required to send messages');
+      err.code = 'EMAIL_NOT_VERIFIED';
+      throw err;
+    }
 
     let replyTo = null;
     if (replyToId) {

@@ -109,10 +109,53 @@ async function canAccessChat(chatId, userId) {
   return row.visibility === 'public' || !!row.role;
 }
 
+async function isUserEmailVerified(userId) {
+  if (!userId) return false;
+  const r = await pool.query('select email_verified_at from users where id = $1', [userId]);
+  return !!r.rows[0]?.email_verified_at;
+}
+
+function requireVerifiedEmail(actionOrReq, res, next) {
+  if (typeof actionOrReq === 'string') {
+    const action = actionOrReq;
+    return async (req, res, next) => {
+      if (req.user?.isApp) return next();
+      if (!req.user?.id) return res.status(401).json({ error: 'unauthorized' });
+      try {
+        const verified = await isUserEmailVerified(req.user.id);
+        if (!verified) {
+          return res.status(403).json({ error: `email verification required to ${action}` });
+        }
+        next();
+      } catch (e) {
+        console.error('failed to check email verification', e);
+        res.status(500).json({ error: 'failed to verify email status' });
+      }
+    };
+  }
+
+  const req = actionOrReq;
+  if (req.user?.isApp) return next();
+  if (!req.user?.id) return res.status(401).json({ error: 'unauthorized' });
+  isUserEmailVerified(req.user.id)
+    .then((verified) => {
+      if (!verified) {
+        return res.status(403).json({ error: 'email verification required' });
+      }
+      next();
+    })
+    .catch((e) => {
+      console.error('failed to check email verification', e);
+      res.status(500).json({ error: 'failed to verify email status' });
+    });
+}
+
 module.exports = {
   authenticateToken,
   blockApps,
   getSpaceMembership,
   requireSpaceAccess,
-  canAccessChat
+  canAccessChat,
+  isUserEmailVerified,
+  requireVerifiedEmail
 };

@@ -1,6 +1,6 @@
 const express = require('express');
 const { AccessToken } = require('livekit-server-sdk');
-const { authenticateToken, canAccessChat } = require('../middleware/auth');
+const { authenticateToken, canAccessChat, requireVerifiedEmail } = require('../middleware/auth');
 const { pool } = require('../db');
 
 const router = express.Router();
@@ -8,7 +8,7 @@ const router = express.Router();
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'devkey';
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || 'secret';
 
-router.post('/token', authenticateToken, async (req, res) => {
+router.post('/token', authenticateToken, requireVerifiedEmail('join voice channels'), async (req, res) => {
   const { chat_id } = req.body;
   const userId = req.user.id;
 

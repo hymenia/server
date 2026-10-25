@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { pool } = require('../db');
-const { authenticateToken, requireSpaceAccess, canAccessChat } = require('../middleware/auth');
+const { authenticateToken, requireSpaceAccess, canAccessChat, requireVerifiedEmail } = require('../middleware/auth');
 const { chatExists } = require('../utils/chatData');
 const { createAndBroadcastMessage, editAndBroadcastMessage, deleteAndBroadcastMessage } = require('../ws/messages');
 const { getMessageWithCallerRole } = require('../utils/messagePermissions');
@@ -136,6 +136,7 @@ router.get('/messages', authenticateToken, getMessagesHandler);
 router.post(
   '/chats/:chatId/attachments',
   authenticateToken,
+  requireVerifiedEmail('send messages'),
   express.raw({ type: 'application/octet-stream', limit: MAX_ATTACHMENT_BYTES }),
   async (req, res) => {
     const { chatId } = req.params;
@@ -185,6 +186,9 @@ router.post(
         res.status(201).json(payload);
       } catch (error) {
         fs.rmSync(filePath, { force: true });
+        if (error.code === 'EMAIL_NOT_VERIFIED') {
+          return res.status(403).json({ error: error.message });
+        }
         throw error;
       }
     } catch (e) {
@@ -230,7 +234,7 @@ router.get('/attachments/:attachmentId', authenticateToken, async (req, res) => 
   }
 });
 
-router.post('/messages', authenticateToken, async (req, res) => {
+router.post('/messages', authenticateToken, requireVerifiedEmail('send messages'), async (req, res) => {
   const chatId = typeof req.body?.chat_id === 'string' ? req.body.chat_id : null;
   const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
   const replyToId = typeof req.body?.reply_to_id === 'string' ? req.body.reply_to_id : null;
@@ -261,6 +265,9 @@ router.post('/messages', authenticateToken, async (req, res) => {
 
     res.status(201).json(payload);
   } catch (e) {
+    if (e.code === 'EMAIL_NOT_VERIFIED') {
+      return res.status(403).json({ error: e.message });
+    }
     if (e.code === 'INVALID_REPLY_TO') {
       return res.status(400).json({ error: e.message });
     }

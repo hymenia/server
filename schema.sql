@@ -7,6 +7,15 @@ create table if not exists instance_id (
   created_at timestamptz not null default now()
 );
 
+-- =========================================================
+
+create table if not exists instance_keys (
+  singleton boolean primary key default true check (singleton),
+  private_key text not null,
+  public_key text not null,
+  created_at timestamptz not null default now()
+);
+
 insert into instance_id (singleton)
 values (true)
 on conflict (singleton) do nothing;

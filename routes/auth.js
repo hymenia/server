@@ -84,7 +84,7 @@ router.post('/register', async (req, res) => {
     );
 
     const token = issueToken(user);
-    res.status(201).json({ user, token });
+    res.status(201).json({ user: { ...user, email_verified: false }, token });
   } catch (e) {
     if (e.code === '23505') {
       const error = e.constraint === 'users_email_lower_unique' ? 'email already in use' : 'username already taken';
@@ -112,7 +112,7 @@ router.post('/login', async (req, res) => {
 
   try {
     let r = await pool.query(
-      'select id, username, password_hash, avatar_url from users where username = $1',
+      'select id, username, password_hash, avatar_url, email_verified_at from users where username = $1',
       [username]
     );
     const user = r.rows[0];
@@ -126,7 +126,12 @@ router.post('/login', async (req, res) => {
     }
 
     const token = issueToken(user);
-    res.json({ token, username: user.username, avatarUrl: user.avatar_url });
+    res.json({
+      token,
+      username: user.username,
+      avatarUrl: user.avatar_url,
+      email_verified: !!user.email_verified_at
+    });
   } catch (e) {
     console.error('failed to log in', e);
     res.status(500).json({ error: 'failed to log in' });
@@ -135,7 +140,7 @@ router.post('/login', async (req, res) => {
 
 async function getPasskeyUser(username) {
   const result = await pool.query(
-    'select id, username, avatar_url from users where username = $1',
+    'select id, username, avatar_url, email_verified_at from users where username = $1',
     [username]
   );
   return result.rows[0];
@@ -302,7 +307,12 @@ router.post('/passkey/login/verify', async (req, res) => {
 
     await pool.query('update passkeys set counter = $1 where credential_id = $2', [verification.authenticationInfo.newCounter, stored.credential_id]);
     await pool.query('delete from passkey_challenges where id = $1', [challenge.id]);
-    res.json({ token: issueToken(user), username: user.username, avatarUrl: user.avatar_url });
+    res.json({
+      token: issueToken(user),
+      username: user.username,
+      avatarUrl: user.avatar_url,
+      email_verified: !!user.email_verified_at
+    });
   } catch (e) {
     console.error('failed to verify passkey login', e);
     res.status(401).json({ error: 'invalid username or passkey' });
