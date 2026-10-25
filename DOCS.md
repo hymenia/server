@@ -9,6 +9,7 @@
 - Passkey registration: `POST /api/auth/passkey/register/options`, then `/api/auth/passkey/register/verify`
 - Captcha configuration: `GET /api/auth/hcaptcha`
 - App tokens: `Authorization: App <app-token>`
+- The first account on an instance is given the `admin` global role.
 
 ## Endpoints
 
@@ -32,6 +33,9 @@
 - `GET /api/profile/:username`*
 - `GET /api/avatar/:username`*
 - `PATCH /api/users/:username/roles`
+- `GET /api/admin/users`
+- `PATCH /api/admin/users/:userId/roles`
+- `DELETE /api/admin/users/:userId`
 - `GET /api/spaces`
 - `GET /api/spaces/discover`
 - `POST /api/spaces`
@@ -79,4 +83,4 @@ Creating/joining spaces, sending messages, and uploading attachments require ver
 
 ### Webhooks
 
-uhh hazel can fill this one out 😂
+o din din gone, check out [the official docs](https://github.com/hymenia/docs)

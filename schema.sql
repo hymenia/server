@@ -141,6 +141,17 @@ alter table spaces
 
 do $$
 begin
+  if exists (
+    select 1
+    from pg_constraint
+    where conname = 'spaces_owner_id_fkey'
+      and conrelid = 'public.spaces'::regclass
+      and confdeltype <> 'n'
+  ) then
+    alter table public.spaces
+      drop constraint spaces_owner_id_fkey;
+  end if;
+
   if not exists (
     select 1
     from pg_constraint
@@ -459,22 +470,66 @@ create index if not exists app_invites_app_idx
 
 -- =========================================================
 
-
 create table if not exists chats (
   id uuid primary key default gen_random_uuid(),
 
-  space_id uuid not null
+  space_id uuid
     references spaces(id)
     on delete cascade,
 
   name text not null,
 
   type text not null check (
-    type in ('text', 'voice')
+    type in ('text', 'voice', 'dm')
   ),
 
   created_at timestamptz not null default now()
 );
+
+alter table chats
+  alter column space_id drop not null;
+
+alter table chats
+  drop constraint if exists chats_type_check;
+
+alter table chats
+  add constraint chats_type_check
+  check (type in ('text', 'voice', 'dm'));
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'chats_space_or_dm_check'
+      and conrelid = 'public.chats'::regclass
+  ) then
+    alter table public.chats
+      add constraint chats_space_or_dm_check
+      check (type = 'dm' or space_id is not null)
+      not valid;
+  end if;
+end
+$$;
+
+-- =========================================================
+
+create table if not exists dm_members (
+  chat_id uuid not null
+    references chats(id)
+    on delete cascade,
+
+  user_id uuid not null
+    references users(id)
+    on delete cascade,
+
+  created_at timestamptz not null default now(),
+
+  primary key (chat_id, user_id)
+);
+
+create index if not exists dm_members_user_idx
+  on dm_members (user_id);
 
 -- =========================================================
 
@@ -741,6 +796,27 @@ create index if not exists chats_space_idx
 
 create index if not exists messages_sender_idx
   on messages (sender_id);
+
+-- =========================================================
+do $$
+begin
+  if not exists (
+    select 1
+    from users
+    where global_roles @> array['admin']::text[]
+  ) then
+    update users
+       set global_roles = array_append(global_roles, 'admin')
+     where id = (
+       select id
+       from users
+       where is_bot = false
+       order by created_at asc, id asc
+       limit 1
+     );
+  end if;
+end
+$$;
 
 -- =========================================================
 -- These are optional

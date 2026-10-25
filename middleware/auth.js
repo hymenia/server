@@ -97,15 +97,17 @@ function requireSpaceAccess(minRoles) {
 
 async function canAccessChat(chatId, userId) {
   const r = await pool.query(
-    `select s.visibility, sm.role
+    `select c.type, s.visibility, sm.role, dm.user_id as dm_user
      from chats c
-     join spaces s on s.id = c.space_id
+     left join spaces s on s.id = c.space_id
      left join space_members sm on sm.space_id = s.id and sm.user_id = $2
+     left join dm_members dm on dm.chat_id = c.id and dm.user_id = $2
      where c.id = $1`,
     [chatId, userId]
   );
   const row = r.rows[0];
   if (!row) return false;
+  if (row.type === 'dm') return !!row.dm_user;
   return row.visibility === 'public' || !!row.role;
 }
 
@@ -150,6 +152,25 @@ function requireVerifiedEmail(actionOrReq, res, next) {
     });
 }
 
+async function requireAdmin(req, res, next) {
+  try {
+    if (req.user?.isApp) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    const r = await pool.query(
+      "select 1 from users where id = $1 and 'admin' = any(global_roles)",
+      [req.user.id]
+    );
+    if (!r.rows[0]) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    next();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'server error' });
+  }
+}
+
 module.exports = {
   authenticateToken,
   blockApps,
@@ -157,5 +178,6 @@ module.exports = {
   requireSpaceAccess,
   canAccessChat,
   isUserEmailVerified,
+  requireAdmin,
   requireVerifiedEmail
 };

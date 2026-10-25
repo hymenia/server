@@ -3,6 +3,7 @@ const { useTls, webauthnRpID, webauthnOrigins } = require('./config');
 const { authenticateToken } = require('./middleware/auth');
 
 const { router: authRouter } = require('./routes/auth');
+const { router: altchaRouter } = require('./routes/altcha');
 const accountRouter = require('./routes/account');
 const { router: spacesRouter, inviteAcceptRouter } = require('./routes/spaces');
 const { router: appsRouter, applicationsRouter } = require('./routes/apps');
@@ -10,6 +11,8 @@ const webhooksRouter = require('./routes/webhooks');
 const { router: chatsRouter, getMessagesHandler } = require('./routes/chats');
 const voiceRouter = require('./routes/voice');
 const instanceRouter = require('./routes/instance');
+const adminRouter = require('./routes/admin');
+const dmsRouter = require('./routes/dms');
 const { liveKitValidateRouter } = require('./ws/voiceProxy');
 
 const app = express();
@@ -48,17 +51,19 @@ app.get('/health', (req, res) => {
     db: {
       configured: !!process.env.DATABASE_URL
     },
-    hcaptcha: {
-      enabled: !!process.env.HCAPTCHA_SECRET,
-      sitekey: process.env.HCAPTCHA_SITEKEY || null
+    altcha: {
+      enabled: !!process.env.ALTCHA_HMAC_KEY
     }
   });
 });
 
 app.use(instanceRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/auth', altchaRouter);
 app.use('/api', accountRouter);
 app.use('/api/spaces', spacesRouter);
+app.use('/api/dms', dmsRouter);
 app.use('/api/invites', inviteAcceptRouter);
 app.use('/api/apps', appsRouter);
 app.use('/api/applications', applicationsRouter);

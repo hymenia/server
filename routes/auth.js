@@ -1,4 +1,5 @@
 const express = require('express');
+const { verifyAltcha } = require('./altcha');
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -10,7 +11,6 @@ const { pool } = require('../db');
 const { jwtSecret, webauthnOrigins, webauthnRpIDForOrigin } = require('../config');
 const { authenticateToken, blockApps } = require('../middleware/auth');
 const { normalizeUsername, issueToken: issueTokenRaw } = require('../utils/tokens');
-const { verifyHCaptcha } = require('../utils/hcaptcha');
 const {
   generateVerificationToken,
   hashVerificationToken,
@@ -24,18 +24,10 @@ function issueToken(user) {
   return issueTokenRaw(user, jwtSecret);
 }
 
-router.get('/hcaptcha', (req, res) => {
-  res.json({
-    enabled: !!process.env.HCAPTCHA_SECRET,
-    sitekey: process.env.HCAPTCHA_SITEKEY || null
-  });
-});
-
 router.post('/register', async (req, res) => {
   const username = normalizeUsername(req.body?.username);
   const password = req.body?.password;
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-  const hcaptchaToken = typeof req.body?.hcaptcha === 'string' ? req.body.hcaptcha : null;
   if (!username || username.length > 80 || typeof password !== 'string' || password.length < 8 || password.length > 200) {
     return res.status(400).json({ error: 'username and password are required' });
   }
@@ -45,46 +37,71 @@ router.post('/register', async (req, res) => {
   if (isDisposableEmail(email)) {
     return res.status(400).json({ error: 'disposable or temporary email addresses are not allowed' });
   }
-  const clientIp = req.headers['cf-connecting-ip'] || req.ip;
-  if (!(await verifyHCaptcha(hcaptchaToken, clientIp))) {
+  if (!(await verifyAltcha(req.body?.altcha))) {
     return res.status(400).json({ error: 'captcha verification failed' });
   }
   try {
-    const existing = await pool.query('select id from users where username = $1', [username]);
-    if (existing.rowCount > 0) {
-      return res.status(409).json({ error: 'username already taken' });
-    }
-    const existingEmail = await pool.query('select id from users where lower(email) = $1', [email]);
-    if (existingEmail.rowCount > 0) {
-      return res.status(409).json({ error: 'email already in use' });
-    }
-
     const hash = await hashPassword(password);
+    const client = await pool.connect();
+    try {
+      await client.query('begin');
 
-    const result = await pool.query(
-      'insert into users (username, password_hash, email) values ($1, $2, $3) returning id, username, created_at, avatar_url, email',
-      [username, hash, email]
-    );
-    const user = result.rows[0];
+      await client.query("select pg_advisory_xact_lock(hashtext('hymenia:first-user-admin'))");
 
-    const verifyToken = generateVerificationToken();
-    const tokenHash = hashVerificationToken(verifyToken);
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const origin = req.headers['origin'] || `${req.protocol}://${req.get('host')}`;
-    const sent = await sendVerificationEmail(email, verifyToken, origin);
+      const existing = await client.query('select id from users where username = $1', [username]);
+      if (existing.rowCount > 0) {
+        await client.query('rollback');
+        return res.status(409).json({ error: 'username already taken' });
+      }
+      const existingEmail = await client.query('select id from users where lower(email) = $1', [email]);
+      if (existingEmail.rowCount > 0) {
+        await client.query('rollback');
+        return res.status(409).json({ error: 'email already in use' });
+      }
 
-    if (!sent) {
-      await pool.query('delete from users where id = $1', [user.id]).catch(() => {});
-      return res.status(500).json({ error: 'failed to send verification email' });
+      const result = await client.query(
+        'insert into users (username, password_hash, email) values ($1, $2, $3) returning id, username, created_at, avatar_url, email, global_roles',
+        [username, hash, email]
+      );
+      const user = result.rows[0];
+
+      const countResult = await client.query(
+        'select count(*)::int as total from users where not is_bot'
+      );
+      if (countResult.rows[0].total === 1) {
+        const promoted = await client.query(
+          "update users set global_roles = array_append(global_roles, 'admin') where id = $1 returning global_roles",
+          [user.id]
+        );
+        user.global_roles = promoted.rows[0].global_roles;
+      }
+
+      const verifyToken = generateVerificationToken();
+      const tokenHash = hashVerificationToken(verifyToken);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const origin = req.headers['origin'] || `${req.protocol}://${req.get('host')}`;
+      const sent = await sendVerificationEmail(email, verifyToken, origin);
+
+      if (!sent) {
+        await client.query('rollback');
+        return res.status(500).json({ error: 'failed to send verification email' });
+      }
+
+      await client.query(
+        'insert into email_verification_tokens (user_id, token_hash, expires_at) values ($1, $2, $3)',
+        [user.id, tokenHash, expiresAt]
+      );
+
+      await client.query('commit');
+
+      const token = issueToken(user);
+      res.status(201).json({ user: { ...user, email_verified: false }, token });
+    } catch (e) {
+      await client.query('rollback').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
     }
-
-    await pool.query(
-      'insert into email_verification_tokens (user_id, token_hash, expires_at) values ($1, $2, $3)',
-      [user.id, tokenHash, expiresAt]
-    );
-
-    const token = issueToken(user);
-    res.status(201).json({ user: { ...user, email_verified: false }, token });
   } catch (e) {
     if (e.code === '23505') {
       const error = e.constraint === 'users_email_lower_unique' ? 'email already in use' : 'username already taken';
@@ -98,15 +115,13 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   const username = normalizeUsername(req.body?.username);
   const password = req.body?.password;
-  const hcaptchaToken = typeof req.body?.hcaptcha === 'string' ? req.body.hcaptcha : null;
 
   // any password shape is fine here so wrong answers all look the same
   if (!username || typeof password !== 'string' || password.length > 200) {
     return res.status(400).json({ error: 'username and password are required' });
   }
 
-  const clientIp = req.headers['cf-connecting-ip'] || req.ip;
-  if (!(await verifyHCaptcha(hcaptchaToken, clientIp))) {
+  if (!(await verifyAltcha(req.body?.altcha))) {
     return res.status(400).json({ error: 'captcha verification failed' });
   }
 
@@ -201,7 +216,8 @@ router.post('/passkey/register/verify', authenticateToken, blockApps, async (req
       response: req.body,
       expectedChallenge: challenge.challenge,
       expectedOrigin: webauthnOrigins,
-      expectedRPID: webauthnRpIDForOrigin(req.get('origin'))
+      expectedRPID: webauthnRpIDForOrigin(req.get('origin')),
+      requireUserVerification: false
     });
     if (!verification.verified || !verification.registrationInfo) {
       return res.status(400).json({ error: 'passkey registration was not verified' });
@@ -294,6 +310,7 @@ router.post('/passkey/login/verify', async (req, res) => {
       expectedChallenge: challenge.challenge,
       expectedOrigin: webauthnOrigins,
       expectedRPID: webauthnRpIDForOrigin(req.get('origin')),
+      requireUserVerification: false,
       credential: {
         id: stored.credential_id,
         publicKey: stored.public_key,

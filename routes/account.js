@@ -1,7 +1,7 @@
 const express = require('express');
 const { hashPassword, comparePassword } = require('../hash');
 const { pool } = require('../db');
-const { authenticateToken, blockApps } = require('../middleware/auth');
+const { authenticateToken, blockApps, isFirstUser } = require('../middleware/auth');
 const { normalizeUsername } = require('../utils/tokens');
 const { validateAvatarDataUrl, getDefaultAvatar } = require('../utils/avatar');
 const { generateVerificationToken, hashVerificationToken, sendVerificationEmail, isDisposableEmail } = require('../utils/email');
@@ -69,7 +69,15 @@ router.get('/profile/:username', async (req, res) => {
 router.get('/account/profile', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      'select id, username, display_name, bio, avatar_url, global_roles, email, email_verified_at from users where id = $1',
+      `select u.id, u.username, u.display_name, u.bio, u.avatar_url, u.global_roles,
+              u.email, u.email_verified_at,
+              u.id = (select fh.id
+                        from users fh
+                       where fh.is_bot = false
+                       order by fh.created_at asc, fh.id asc
+                       limit 1) as is_instance_owner
+         from users u
+        where u.id = $1`,
       [req.user.id]
     );
     if (result.rowCount === 0) {
@@ -84,7 +92,8 @@ router.get('/account/profile', authenticateToken, async (req, res) => {
       avatar_url: row.avatar_url,
       global_roles: row.global_roles,
       email: row.email,
-      email_verified: !!row.email_verified_at
+      email_verified: !!row.email_verified_at,
+      is_instance_owner: !!row.is_instance_owner
     });
   } catch (e) {
     console.error('failed to fetch profile', e);
@@ -230,7 +239,7 @@ router.post('/account/delete', authenticateToken, blockApps, async (req, res) =>
   }
 
   try {
-    const userRes = await pool.query('select id, password_hash from users where id = $1', [req.user.id]);
+    const userRes = await pool.query('select id, password_hash, global_roles from users where id = $1', [req.user.id]);
     const user = userRes.rows[0];
     if (!user) {
       return res.status(404).json({ error: 'user not found' });
@@ -239,6 +248,22 @@ router.post('/account/delete', authenticateToken, blockApps, async (req, res) =>
     const match = await comparePassword(password, user.password_hash);
     if (!match) {
       return res.status(401).json({ error: 'incorrect password' });
+    }
+    if (await isFirstUser(req.user.id)) {
+      return res.status(400).json({ error: 'the first account created' });
+    }
+    if (user.global_roles.includes('admin')) {
+      const remaining = await pool.query(
+        `select count(*)::int as total
+           from users
+          where not is_bot
+            and id <> $1
+            and global_roles @> array['admin']::text[]`,
+        [user.id]
+      );
+      if (remaining.rows[0].total === 0) {
+        return res.status(400).json({ error: 'promote another admin before deleting the last admin account' });
+      }
     }
 
     await pool.query('delete from users where id = $1', [req.user.id]);
