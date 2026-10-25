@@ -32,6 +32,9 @@ the scheme and port. For a Tauri desktop client, include `tauri://localhost`
 and `http://tauri.localhost` so packaged apps can use passkeys on Linux, macOS,
 and Windows. Set the browser origin and RP ID for your deployed website as well.
 
+If you don't want email verification on your instance, you can disable it by setting
+`DISABLE_EMAIL_VERIFICATION` to true in `.env`. We reccomend doing this if your instance is meant for a small amount of people, for example you could have an instance for Food and the spaces are all on different foods.
+
 Set `INSTANCE_NAME` and `PUBLIC_URL` to describe this server. `PUBLIC_URL` must
 be its public HTTP or HTTPS origin. The server creates a stable instance ID in
 the database on first startup and publishes this information at

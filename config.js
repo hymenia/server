@@ -47,6 +47,10 @@ function webauthnRpIDForOrigin(origin) {
   return webauthnRpID;
 }
 
+const emailVerificationRequired = String(process.env.DISABLE_EMAIL_VERIFICATION || '')
+  .trim()
+  .toLowerCase() !== 'true';
+
 module.exports = {
   port,
   instanceName,
@@ -57,5 +61,6 @@ module.exports = {
   useTls,
   webauthnRpID,
   webauthnOrigins,
-  webauthnRpIDForOrigin
+  webauthnRpIDForOrigin,
+  emailVerificationRequired
 };

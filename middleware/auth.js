@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { pool } = require('../db');
-const { jwtSecret } = require('../config');
+const { jwtSecret, emailVerificationRequired } = require('../config');
 const { hashAppToken } = require('../utils/tokens');
 
 async function authenticateToken(req, res, next) {
@@ -95,6 +95,7 @@ function requireSpaceAccess(minRoles) {
   };
 }
 
+
 async function canAccessChat(chatId, userId) {
   const r = await pool.query(
     `select c.type, s.visibility, sm.role, dm.user_id as dm_user
@@ -112,12 +113,20 @@ async function canAccessChat(chatId, userId) {
 }
 
 async function isUserEmailVerified(userId) {
+  if (!emailVerificationRequired) return true;
   if (!userId) return false;
   const r = await pool.query('select email_verified_at from users where id = $1', [userId]);
   return !!r.rows[0]?.email_verified_at;
 }
 
 function requireVerifiedEmail(actionOrReq, res, next) {
+  if (!emailVerificationRequired) {
+    if (typeof actionOrReq === 'string') {
+      return (req, res, next) => next();
+    }
+    return next();
+  }
+
   if (typeof actionOrReq === 'string') {
     const action = actionOrReq;
     return async (req, res, next) => {
