@@ -10,6 +10,7 @@
 - Captcha configuration: `GET /api/auth/hcaptcha`
 - App tokens: `Authorization: App <app-token>`
 - The first account on an instance is given the `admin` global role.
+- Admins can delete any account, but the last remaining admin cannot be deleted.
 
 ## Endpoints
 

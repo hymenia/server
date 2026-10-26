@@ -179,16 +179,6 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-async function isFirstUser(userId, client = pool) {
-  const r = await client.query(
-    `select id from users
-      where is_bot = false
-      order by created_at asc, id asc
-      limit 1`
-  );
-  return r.rows[0]?.id === userId;
-}
-
 module.exports = {
   authenticateToken,
   blockApps,
@@ -197,6 +187,5 @@ module.exports = {
   canAccessChat,
   isUserEmailVerified,
   requireAdmin,
-  requireVerifiedEmail,
-  isFirstUser
+  requireVerifiedEmail
 };

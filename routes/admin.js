@@ -1,6 +1,6 @@
 const express = require('express');
 const { pool } = require('../db');
-const { authenticateToken, requireAdmin, isFirstUser } = require('../middleware/auth');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -35,11 +35,6 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
            u.global_roles,
            u.is_bot,
            u.app_owner_id,
-           u.id = (select fh.id
-                     from users fh
-                    where fh.is_bot = false
-                    order by fh.created_at asc, fh.id asc
-                    limit 1) as is_instance_owner,
            owner.username as app_owner_username,
            u.created_at,
            (select count(*)::int
@@ -151,11 +146,6 @@ router.delete('/users/:userId', authenticateToken, requireAdmin, async (req, res
       await client.query('rollback');
       return res.status(404).json({ error: 'user not found' });
     }
-    if (await isFirstUser(userId, client)) {
-      await client.query('rollback');
-      return res.status(400).json({ error: 'the first human account cannot be deleted' });
-    }
-
     const ids = target.rows.map((row) => row.id);
     const user = target.rows.find((row) => row.id === userId);
 
