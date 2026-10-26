@@ -90,6 +90,48 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+router.patch('/users/:userId/moderation', authenticateToken, requireAdmin, async (req, res) => {
+  const { userId } = req.params;
+  if (!USER_ID_RE.test(userId)) {
+    return res.status(400).json({ error: 'invalid user id' });
+  }
+
+  const status = Number(req.body?.status);
+  if (![0, 1, 2, 3].includes(status)) {
+    return res.status(400).json({ error: 'status must be an integer between 0 and 3' });
+  }
+
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 500) : null;
+  const expiresAt = req.body?.expires_at ? new Date(req.body.expires_at) : null;
+
+  if (status === 3 && (!expiresAt || Number.isNaN(expiresAt.getTime()))) {
+    return res.status(400).json({ error: 'expiration date is required for temporary suspensions' });
+  }
+
+  try {
+    const existing = await pool.query('select id, username from users where id = $1', [userId]);
+    if (existing.rowCount === 0) {
+      return res.status(404).json({ error: 'user not found' });
+    }
+
+    const result = await pool.query(
+      `update users 
+       set moderation_status = $1, 
+           moderation_reason = $2, 
+           moderation_expires_at = $3, 
+           moderated_by = $4 
+       where id = $5 
+       returning id, username, moderation_status, moderation_reason, moderation_expires_at`,
+      [status, reason, status === 3 ? expiresAt : null, req.user.id, userId]
+    );
+
+    res.json(result.rows[0]);
+  } catch (e) {
+    console.error('failed to update user moderation status', e);
+    res.status(500).json({ error: 'failed to update user moderation status' });
+  }
+});
+
 router.patch('/users/:userId/roles', authenticateToken, requireAdmin, async (req, res) => {
   const { userId } = req.params;
   if (!USER_ID_RE.test(userId)) {
