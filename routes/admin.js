@@ -5,7 +5,7 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const router = express.Router();
 
 const USER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const GLOBAL_ROLES = new Set(['admin', 'verified', 'developer']);
+const GLOBAL_ROLES = new Set(['admin', 'verified', 'developer', 'glee']);
 
 function escapeLike(value) {
   return value.replace(/[\\%_]/g, '\\$&');
@@ -98,7 +98,7 @@ router.patch('/users/:userId/roles', authenticateToken, requireAdmin, async (req
 
   const roles = Array.isArray(req.body?.roles) ? [...new Set(req.body.roles)] : null;
   if (!roles || roles.some((role) => typeof role !== 'string' || !GLOBAL_ROLES.has(role))) {
-    return res.status(400).json({ error: 'roles must be an array containing only admin, verified or developer' });
+    return res.status(400).json({ error: 'roles must be an array containing only admin, verified, developer, or glee' });
   }
 
   try {
