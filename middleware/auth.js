@@ -16,7 +16,7 @@ async function authenticateToken(req, res, next) {
     try {
       const hash = hashAppToken(token);
       const r = await pool.query(
-        `select u.id, u.username, u.is_bot, u.app_owner_id, bt.id as token_id
+        `select u.id, u.username, u.is_bot, u.app_owner_id, u.moderation_status, u.moderation_expires_at, bt.id as token_id
          from app_tokens bt join users u on u.id = bt.app_user_id
          where bt.token_hash = $1`,
         [hash]
@@ -24,9 +24,13 @@ async function authenticateToken(req, res, next) {
       const row = r.rows[0];
       if (!row) return res.status(401).json({ error: 'invalid app token' });
 
+      if (row.moderation_status === 2) {
+        return res.status(403).json({ error: 'Account is banned' });
+      }
+
       pool.query('update app_tokens set last_used_at = now() where id = $1', [row.token_id]).catch(() => {});
 
-      req.user = { id: row.id, username: row.username, isApp: true, appOwnerId: row.app_owner_id };
+      req.user = { id: row.id, username: row.username, isApp: true, appOwnerId: row.app_owner_id, moderationStatus: row.moderation_status };
       return next();
     } catch (e) {
       console.error('app token auth error', e);
@@ -40,8 +44,36 @@ async function authenticateToken(req, res, next) {
   }
 
   try {
-    req.user = jwt.verify(token, jwtSecret);
-    req.user.isApp = false;
+    const payload = jwt.verify(token, jwtSecret);
+    
+    const userRes = await pool.query(
+      'select moderation_status, moderation_expires_at from users where id = $1',
+      [payload.id]
+    );
+    const dbUser = userRes.rows[0];
+    if (!dbUser) {
+      return res.status(401).json({ error: 'user not found' });
+    }
+
+    let status = dbUser.moderation_status;
+    let expiresAt = dbUser.moderation_expires_at;
+
+    if (status === 3 && expiresAt && new Date() > new Date(expiresAt)) {
+      await pool.query(
+        'update users set moderation_status = 0, moderation_reason = null, moderation_expires_at = null, moderated_by = null where id = $1',
+        [payload.id]
+      );
+      status = 0;
+    }
+
+    if (status === 2) {
+      return res.status(403).json({ error: 'Your account has been banned.' });
+    }
+    if (status === 3) {
+      return res.status(403).json({ error: 'Your account is currently suspended.' });
+    }
+
+    req.user = { ...payload, isApp: false, moderationStatus: status };
     next();
   } catch (e) {
     return res.status(401).json({ error: 'invalid or expired token' });
@@ -51,6 +83,13 @@ async function authenticateToken(req, res, next) {
 function blockApps(req, res, next) {
   if (req.user?.isApp) {
     return res.status(403).json({ error: 'apps cannot perform this action' });
+  }
+  next();
+}
+
+function requireNotLimited(req, res, next) {
+  if (req.user?.moderationStatus === 1) {
+    return res.status(403).json({ error: 'Your account is limited. You cannot perform this action.' });
   }
   next();
 }
@@ -182,6 +221,7 @@ async function requireAdmin(req, res, next) {
 module.exports = {
   authenticateToken,
   blockApps,
+  requireNotLimited,
   getSpaceMembership,
   requireSpaceAccess,
   canAccessChat,

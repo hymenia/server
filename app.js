@@ -14,7 +14,7 @@ const instanceRouter = require('./routes/instance');
 const adminRouter = require('./routes/admin');
 const dmsRouter = require('./routes/dms');
 const { liveKitValidateRouter } = require('./ws/voiceProxy');
-
+const { router: reportsRouter, adminRouter: adminReportsRouter } = require('./routes/reports');
 const app = express();
 
 app.use((req, res, next) => {
@@ -59,6 +59,8 @@ app.get('/health', (req, res) => {
 
 app.use(instanceRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/reports', reportsRouter);
+app.use('/api/admin/reports', adminReportsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/auth', altchaRouter);
 app.use('/api', accountRouter);

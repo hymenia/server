@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { pool } = require('../db');
-const { authenticateToken, requireSpaceAccess, canAccessChat, requireVerifiedEmail } = require('../middleware/auth');
+const { authenticateToken, requireSpaceAccess, canAccessChat, requireVerifiedEmail, requireNotLimited } = require('../middleware/auth');
 const { chatExists } = require('../utils/chatData');
 const { createAndBroadcastMessage, editAndBroadcastMessage, deleteAndBroadcastMessage } = require('../ws/messages');
 const { getMessageWithCallerRole } = require('../utils/messagePermissions');
@@ -136,6 +136,7 @@ router.get('/messages', authenticateToken, getMessagesHandler);
 router.post(
   '/chats/:chatId/attachments',
   authenticateToken,
+  requireNotLimited,
   requireVerifiedEmail('send messages'),
   express.raw({ type: 'application/octet-stream', limit: MAX_ATTACHMENT_BYTES }),
   async (req, res) => {
@@ -234,7 +235,7 @@ router.get('/attachments/:attachmentId', authenticateToken, async (req, res) => 
   }
 });
 
-router.post('/messages', authenticateToken, requireVerifiedEmail('send messages'), async (req, res) => {
+router.post('/messages', authenticateToken, requireNotLimited, requireVerifiedEmail('send messages'), async (req, res) => {
   const chatId = typeof req.body?.chat_id === 'string' ? req.body.chat_id : null;
   const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
   const replyToId = typeof req.body?.reply_to_id === 'string' ? req.body.reply_to_id : null;

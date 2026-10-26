@@ -34,6 +34,18 @@ alter table users
   add column if not exists avatar_url text;
 
 alter table users
+  add column if not exists moderation_status integer not null default 0;
+
+alter table users
+  add column if not exists moderation_reason text;
+
+alter table users
+  add column if not exists moderation_expires_at timestamptz;
+
+alter table users
+  add column if not exists moderated_by uuid;
+
+alter table users
   add column if not exists is_bot boolean not null default false;
 
 alter table users
@@ -857,3 +869,37 @@ begin
   end if;
 end
 $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'users_moderated_by_fkey'
+      and conrelid = 'public.users'::regclass
+  ) then
+    alter table public.users
+      add constraint users_moderated_by_fkey
+      foreign key (moderated_by)
+      references public.users(id)
+      on delete set null;
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'users_moderation_status_check'
+      and conrelid = 'public.users'::regclass
+  ) then
+    alter table public.users
+      add constraint users_moderation_status_check
+      check (moderation_status between 0 and 3);
+  end if;
+end
+$$;
+
+create index if not exists users_moderation_status_idx
+  on users (moderation_status);

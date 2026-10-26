@@ -1,6 +1,6 @@
 const express = require('express');
 const { pool } = require('../db');
-const { authenticateToken, blockApps, requireSpaceAccess, getSpaceMembership, requireVerifiedEmail } = require('../middleware/auth');
+const { authenticateToken, blockApps, requireSpaceAccess, getSpaceMembership, requireVerifiedEmail, requireNotLimited } = require('../middleware/auth');
 const { normalizeUsername, generateInviteCode } = require('../utils/tokens');
 
 const router = express.Router();
@@ -44,7 +44,7 @@ router.get('/discover', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/', authenticateToken, blockApps, requireVerifiedEmail('create a space'), async (req, res) => {
+router.post('/', authenticateToken, blockApps, requireNotLimited, requireVerifiedEmail('create a space'), async (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   const visibility = req.body?.visibility === 'public' ? 'public' : 'private';
 

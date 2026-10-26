@@ -8,7 +8,7 @@ const {
 } = require('@simplewebauthn/server');
 const { hashPassword, comparePassword, DUMMY_HASH } = require('../hash');
 const { pool } = require('../db');
-const { jwtSecret, webauthnOrigins, webauthnRpIDForOrigin } = require('../config');
+const { jwtSecret, webauthnOrigins, webauthnRpIDForOrigin, emailVerificationRequired } = require('../config');
 const { authenticateToken, blockApps } = require('../middleware/auth');
 const { normalizeUsername, issueToken: issueTokenRaw } = require('../utils/tokens');
 const {
@@ -59,9 +59,11 @@ router.post('/register', async (req, res) => {
         return res.status(409).json({ error: 'email already in use' });
       }
 
+      const emailVerifiedAt = emailVerificationRequired ? null : new Date();
+
       const result = await client.query(
-        'insert into users (username, password_hash, email) values ($1, $2, $3) returning id, username, created_at, avatar_url, email, global_roles',
-        [username, hash, email]
+        'insert into users (username, password_hash, email, email_verified_at) values ($1, $2, $3, $4) returning id, username, created_at, avatar_url, email, email_verified_at, global_roles',
+        [username, hash, email, emailVerifiedAt]
       );
       const user = result.rows[0];
 
@@ -76,26 +78,28 @@ router.post('/register', async (req, res) => {
         user.global_roles = promoted.rows[0].global_roles;
       }
 
-      const verifyToken = generateVerificationToken();
-      const tokenHash = hashVerificationToken(verifyToken);
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      const origin = req.headers['origin'] || `${req.protocol}://${req.get('host')}`;
-      const sent = await sendVerificationEmail(email, verifyToken, origin);
+      if (emailVerificationRequired) {
+        const verifyToken = generateVerificationToken();
+        const tokenHash = hashVerificationToken(verifyToken);
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const origin = req.headers['origin'] || `${req.protocol}://${req.get('host')}`;
+        const sent = await sendVerificationEmail(email, verifyToken, origin);
 
-      if (!sent) {
-        await client.query('rollback');
-        return res.status(500).json({ error: 'failed to send verification email' });
+        if (!sent) {
+          await client.query('rollback');
+          return res.status(500).json({ error: 'failed to send verification email' });
+        }
+
+        await client.query(
+          'insert into email_verification_tokens (user_id, token_hash, expires_at) values ($1, $2, $3)',
+          [user.id, tokenHash, expiresAt]
+        );
       }
-
-      await client.query(
-        'insert into email_verification_tokens (user_id, token_hash, expires_at) values ($1, $2, $3)',
-        [user.id, tokenHash, expiresAt]
-      );
 
       await client.query('commit');
 
       const token = issueToken(user);
-      res.status(201).json({ user: { ...user, email_verified: false }, token });
+      res.status(201).json({ user: { ...user, email_verified: !!user.email_verified_at }, token });
     } catch (e) {
       await client.query('rollback').catch(() => {});
       throw e;
@@ -116,7 +120,6 @@ router.post('/login', async (req, res) => {
   const username = normalizeUsername(req.body?.username);
   const password = req.body?.password;
 
-  // any password shape is fine here so wrong answers all look the same
   if (!username || typeof password !== 'string' || password.length > 200) {
     return res.status(400).json({ error: 'username and password are required' });
   }
@@ -127,7 +130,7 @@ router.post('/login', async (req, res) => {
 
   try {
     let r = await pool.query(
-      'select id, username, password_hash, avatar_url, email_verified_at from users where username = $1',
+      'select id, username, password_hash, avatar_url, email_verified_at, moderation_status, moderation_expires_at from users where username = $1',
       [username]
     );
     const user = r.rows[0];
@@ -138,6 +141,22 @@ router.post('/login', async (req, res) => {
     }
     if (!(await comparePassword(password, user.password_hash))) {
       return res.status(401).json({ error: 'invalid username or password' });
+    }
+
+    let status = user.moderation_status;
+    if (status === 3 && user.moderation_expires_at && new Date() > new Date(user.moderation_expires_at)) {
+      await pool.query(
+        'update users set moderation_status = 0, moderation_reason = null, moderation_expires_at = null, moderated_by = null where id = $1',
+        [user.id]
+      );
+      status = 0;
+    }
+
+    if (status === 2) {
+      return res.status(403).json({ error: 'Your account has been banned.' });
+    }
+    if (status === 3) {
+      return res.status(403).json({ error: 'Your account is currently suspended.' });
     }
 
     const token = issueToken(user);
