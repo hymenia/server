@@ -24,13 +24,17 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/discover', authenticateToken, async (req, res) => {
   try {
     const r = await pool.query(
-      `select s.id, s.name, s.created_at
-       from spaces s
-       where s.visibility = 'public'
-         and not exists (
-           select 1 from space_members sm where sm.space_id = s.id and sm.user_id = $1
-         )
-       order by s.created_at asc`,
+      `select s.id, s.name, s.created_at,
+              (select count(*)::int
+                 from space_members m
+                where m.space_id = s.id) as member_count
+         from spaces s
+        where s.visibility = 'public'
+          and not exists (
+            select 1 from space_members sm
+             where sm.space_id = s.id and sm.user_id = $1
+          )
+        order by member_count desc, s.created_at asc`,
       [req.user.id]
     );
     res.json(r.rows);
@@ -96,11 +100,11 @@ router.get('/:spaceId/members', authenticateToken, requireSpaceAccess(['owner', 
   const { spaceId } = req.params;
   try {
     const r = await pool.query(
-      `select u.id, u.username, u.is_bot, sm.role, sm.joined_at
-       from space_members sm
-       join users u on u.id = sm.user_id
-       where sm.space_id = $1
-       order by sm.joined_at asc`,
+      `select u.id, u.username, u.display_name, u.is_bot, sm.role, sm.joined_at
+      from space_members sm
+      join users u on u.id = sm.user_id
+      where sm.space_id = $1
+      order by sm.joined_at asc`,
       [spaceId]
     );
     res.json(r.rows);
