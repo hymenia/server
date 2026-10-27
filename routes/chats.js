@@ -117,8 +117,9 @@ const getMessagesHandler = async (req, res) => {
     const r = await pool.query(page.text, page.params);
     const hasMore = r.rows.length > MESSAGES_PAGE_SIZE;
     const rows = hasMore ? r.rows.slice(0, MESSAGES_PAGE_SIZE) : r.rows;
-    const attachments = await attachmentsByMessageId(rows.map((row) => row.id));
-    const reactions = await reactionsByMessageId(ids, req.user.id);
+    const messageIds = rows.map((row) => row.id);
+    const attachments = await attachmentsByMessageId(messageIds);
+    const reactions = await reactionsByMessageId(messageIds, req.user.id);
     const messages = rows.map((row) => ({
       ...row,
       attachments: attachments.get(row.id) || [],
