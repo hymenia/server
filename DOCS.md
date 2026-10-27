@@ -14,7 +14,11 @@
 
 ## Endpoints
 
+### Instance & Health
 - `GET /.well-known/hymenia`*
+- `GET /health`*
+
+### Authentication & Passkeys
 - `GET /api/auth/hcaptcha`*
 - `POST /api/auth/register`*
 - `POST /api/auth/login`*
@@ -22,6 +26,9 @@
 - `POST /api/auth/passkey/register/verify`
 - `POST /api/auth/passkey/login/options`*
 - `POST /api/auth/passkey/login/verify`*
+- `POST /api/auth/altcha/challenge`*
+
+### Account & Profiles
 - `GET /api/account/profile`
 - `PATCH /api/account/profile`
 - `POST /api/account/avatar`
@@ -34,19 +41,34 @@
 - `GET /api/profile/:username`*
 - `GET /api/avatar/:username`*
 - `PATCH /api/users/:username/roles`
+
+### Administration
 - `GET /api/admin/users`
 - `PATCH /api/admin/users/:userId/roles`
 - `DELETE /api/admin/users/:userId`
+- `GET /api/admin/reports`
+- `PATCH /api/admin/reports/:reportId`
+
+### Spaces & Invites
 - `GET /api/spaces`
 - `GET /api/spaces/discover`
 - `POST /api/spaces`
+- `GET /api/spaces/:spaceId`
+- `PATCH /api/spaces/:spaceId`
+- `DELETE /api/spaces/:spaceId`
 - `POST /api/spaces/:spaceId/join`
+- `POST /api/spaces/:spaceId/leave`
 - `GET /api/spaces/:spaceId/members`
 - `POST /api/spaces/:spaceId/members`
-- `POST /api/spaces/:spaceId/invites`
+- `PATCH /api/spaces/:spaceId/members/:userId`
+- `DELETE /api/spaces/:spaceId/members/:userId`
 - `GET /api/spaces/:spaceId/invites`
+- `POST /api/spaces/:spaceId/invites`
 - `DELETE /api/spaces/:spaceId/invites/:inviteId`
+- `GET /api/invites/:code`*
 - `POST /api/invites/:code/accept`
+
+### Chats & Messages
 - `GET /api/spaces/:spaceId/chats`
 - `POST /api/spaces/:spaceId/chats`
 - `GET /api/messages?chat_id=...`
@@ -56,25 +78,42 @@
 - `DELETE /api/messages/:messageId`
 - `POST /api/chats/:chatId/attachments`
 - `GET /api/attachments/:attachmentId`
-- `POST /api/apps`
+
+### Reactions
+- `PUT /api/messages/:messageId/reactions/:emoji`
+- `DELETE /api/messages/:messageId/reactions/:emoji`
+
+### Direct Messages (DMs)
+- `GET /api/dms`
+- `POST /api/dms`
+- `GET /api/dms/:dmId/messages`
+
+### Apps, Webhooks & Applications
 - `GET /api/apps`
+- `POST /api/apps`
 - `DELETE /api/apps/:appId`
 - `POST /api/apps/:appId/regenerate`
-- `POST /api/apps/:appId/invites`
 - `GET /api/apps/:appId/invites`
+- `POST /api/apps/:appId/invites`
 - `DELETE /api/apps/:appId/invites/:inviteId`
+- `GET /api/apps/:appId/webhooks`
+- `POST /api/apps/:appId/webhooks`
+- `DELETE /api/apps/:appId/webhooks/:webhookId`
 - `GET /api/applications/:code`
 - `POST /api/applications/:code/accept`
-- `POST /api/apps/:appId/webhooks`
-- `GET /api/apps/:appId/webhooks`
-- `DELETE /api/apps/:appId/webhooks/:webhookId`
 - `POST /api/webhooks/:webhookId/:token`*
 - `PATCH /api/webhooks/:webhookId/:token/messages/:messageId`*
 - `DELETE /api/webhooks/:webhookId/:token/messages/:messageId`*
+
+### Voice & LiveKit
 - `POST /api/voice/token`
-- `GET /health`*
 - `GET /livekit/rtc/v1/validate`*
 - `GET /livekit/rtc/validate`*
+
+### Content Reporting
+- `POST /api/reports`
+
+### WebSockets
 - `ws://127.0.0.1:9070/ws`
 - `ws://127.0.0.1:9070/livekit/rtc/v1`
 - `ws://127.0.0.1:9070/livekit/rtc`
@@ -84,4 +123,4 @@ Creating/joining spaces, sending messages, and uploading attachments require ver
 
 ### Webhooks
 
-o din din gone, check out [the official docs](https://github.com/hymenia/docs)
+Check out [the official docs](https://github.com/hymenia/docs) bot & webhook documentation.
