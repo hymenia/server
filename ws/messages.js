@@ -1,5 +1,6 @@
 const { pool } = require('../db');
 const { broadcastToRoom } = require('./rooms');
+const { reactionSummary } = require('../utils/reactions');
 
 async function createAndBroadcastMessage(opts, db = pool) {
   const chatId = opts.chatId;
@@ -168,4 +169,36 @@ async function deleteAndBroadcastMessage(opts) {
   return payload;
 }
 
-module.exports = { createAndBroadcastMessage, editAndBroadcastMessage, deleteAndBroadcastMessage };
+async function reactAndBroadcast(opts) {
+  const { messageId, chatId, userId, emoji, add } = opts;
+
+  if (add) {
+    await pool.query(
+      `insert into message_reactions (message_id, user_id, emoji)
+       values ($1, $2, $3)
+       on conflict do nothing`,
+      [messageId, userId, emoji]
+    );
+  } else {
+    await pool.query(
+      'delete from message_reactions where message_id = $1 and user_id = $2 and emoji = $3',
+      [messageId, userId, emoji]
+    );
+  }
+
+  const payload = {
+    event: 'reaction_update',
+    message_id: messageId,
+    chat_id: chatId,
+    emoji,
+    user_id: userId,
+    added: !!add,
+    reactions: await reactionSummary(messageId)
+  };
+
+  broadcastToRoom(chatId, payload);
+
+  return payload;
+}
+
+module.exports = { createAndBroadcastMessage, editAndBroadcastMessage, deleteAndBroadcastMessage, reactAndBroadcast };

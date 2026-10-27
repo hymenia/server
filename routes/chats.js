@@ -8,6 +8,7 @@ const { chatExists } = require('../utils/chatData');
 const { createAndBroadcastMessage, editAndBroadcastMessage, deleteAndBroadcastMessage } = require('../ws/messages');
 const { getMessageWithCallerRole } = require('../utils/messagePermissions');
 const { buildMessagesPageQuery, UUID_RE, MESSAGES_PAGE_SIZE } = require('../utils/messagePagination');
+const { reactionsByMessageId } = require('../utils/reactions');
 
 const router = express.Router();
 const attachmentsDir = process.env.ATTACHMENTS_DIR || path.join(__dirname, '..', 'uploads');
@@ -117,9 +118,11 @@ const getMessagesHandler = async (req, res) => {
     const hasMore = r.rows.length > MESSAGES_PAGE_SIZE;
     const rows = hasMore ? r.rows.slice(0, MESSAGES_PAGE_SIZE) : r.rows;
     const attachments = await attachmentsByMessageId(rows.map((row) => row.id));
+    const reactions = await reactionsByMessageId(ids, req.user.id);
     const messages = rows.map((row) => ({
       ...row,
-      attachments: attachments.get(row.id) || []
+      attachments: attachments.get(row.id) || [],
+      reactions: reactions.get(row.id) || []
     }));
     res.json({ messages, hasMore });
   } catch (e) {
