@@ -13,29 +13,19 @@ async function authenticateToken(req, res, next) {
     const token = authHeader.slice(4).trim();
     if (!token) return res.status(401).json({ error: 'token required' });
 
-    try {
-      const hash = hashAppToken(token);
-      const r = await pool.query(
-        `select u.id, u.username, u.is_bot, u.app_owner_id, u.moderation_status, u.moderation_expires_at, bt.id as token_id
-         from app_tokens bt join users u on u.id = bt.app_user_id
-         where bt.token_hash = $1`,
-        [hash]
-      );
-      const row = r.rows[0];
-      if (!row) return res.status(401).json({ error: 'invalid app token' });
-
-      if (row.moderation_status === 2) {
-        return res.status(403).json({ error: 'Account is banned' });
-      }
-
-      pool.query('update app_tokens set last_used_at = now() where id = $1', [row.token_id]).catch(() => {});
-
-      req.user = { id: row.id, username: row.username, isApp: true, appOwnerId: row.app_owner_id, moderationStatus: row.moderation_status };
-      return next();
-    } catch (e) {
-      console.error('app token auth error', e);
-      return res.status(401).json({ error: 'invalid app token' });
-    }
+try {
+  const claims = jwt.verify(token, jwtSecret);
+  const r = await pool.query('select tokens_valid_after from users where id = $1', [claims.id]);
+  const row = r.rows[0];
+  if (!row || claims.iat * 1000 < new Date(row.tokens_valid_after).getTime()) {
+    return res.status(401).json({ error: 'invalid or expired token' });
+  }
+  req.user = claims;
+  req.user.isApp = false;
+  next();
+} catch (e) {
+  return res.status(401).json({ error: 'invalid or expired token' });
+}
   }
 
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
