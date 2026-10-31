@@ -5,7 +5,7 @@
 # Hymenia Server
 
 The backend for Hymenia, a new open-source BYOC (bring your own client) platform for messaging and VoIP calls.
-We are nowhere near finished!
+[Looking for the newer version?](https://github.com/hymenia/server-v2)
 
 ## Quick setup
 
