@@ -13,19 +13,30 @@ async function authenticateToken(req, res, next) {
     const token = authHeader.slice(4).trim();
     if (!token) return res.status(401).json({ error: 'token required' });
 
-try {
-  const claims = jwt.verify(token, jwtSecret);
-  const r = await pool.query('select tokens_valid_after from users where id = $1', [claims.id]);
-  const row = r.rows[0];
-  if (!row || claims.iat * 1000 < new Date(row.tokens_valid_after).getTime()) {
-    return res.status(401).json({ error: 'invalid or expired token' });
-  }
-  req.user = claims;
-  req.user.isApp = false;
-  next();
-} catch (e) {
-  return res.status(401).json({ error: 'invalid or expired token' });
-}
+    try {
+      const r = await pool.query(
+        `update app_tokens t
+            set last_used_at = now()
+           from users u
+          where t.token_hash = $1
+            and u.id = t.app_user_id
+            and u.is_bot = true
+        returning u.id, u.username`,
+        [hashAppToken(token)]
+      );
+      if (r.rowCount === 0) {
+        return res.status(401).json({ error: 'invalid token' });
+      }
+      req.user = {
+        id: r.rows[0].id,
+        username: r.rows[0].username,
+        isApp: true
+      };
+      return next();
+    } catch (e) {
+      console.error('failed to authenticate app token', e);
+      return res.status(500).json({ error: 'failed to authenticate' });
+    }
   }
 
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -35,7 +46,7 @@ try {
 
   try {
     const payload = jwt.verify(token, jwtSecret);
-    
+
     const userRes = await pool.query(
       'select moderation_status, moderation_expires_at from users where id = $1',
       [payload.id]

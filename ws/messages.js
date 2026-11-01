@@ -1,6 +1,7 @@
 const { pool } = require('../db');
 const { broadcastToRoom } = require('./rooms');
 const { reactionSummary } = require('../utils/reactions');
+const { buildMessageByIdQuery } = require('../utils/messagePagination');
 
 async function createAndBroadcastMessage(opts, db = pool) {
   const chatId = opts.chatId;
@@ -20,8 +21,6 @@ async function createAndBroadcastMessage(opts, db = pool) {
       'select display_name, global_roles, email_verified_at from users where id = $1',
       [senderId]
     );
-    const senderDisplayName = opts.senderDisplayName || senderResult.rows[0]?.display_name || null;
-    const senderGlobalRoles = senderResult.rows[0]?.global_roles || [];
 
     if (!isSenderApp && !opts.webhookId && !senderResult.rows[0]?.email_verified_at) {
       const err = new Error('email verification required to send messages');
@@ -29,18 +28,14 @@ async function createAndBroadcastMessage(opts, db = pool) {
       throw err;
     }
 
-    let replyTo = null;
+    let replyTarget = null;
     if (replyToId) {
       const replyRes = await client.query(
-        `select m.id, m.content, coalesce(w.name, u.username) as sender
-         from messages m
-         left join users u on u.id = m.sender_id
-         left join webhooks w on w.id = m.webhook_id
-         where m.id = $1 and m.chat_id = $2`,
+        'select id from messages where id = $1 and chat_id = $2',
         [replyToId, chatId]
       );
-      replyTo = replyRes.rows[0] || null;
-      if (!replyTo) {
+      replyTarget = replyRes.rows[0] || null;
+      if (!replyTarget) {
         const err = new Error('reply_to_id does not refer to a message in this chat');
         err.code = 'INVALID_REPLY_TO';
         throw err;
@@ -51,12 +46,12 @@ async function createAndBroadcastMessage(opts, db = pool) {
       `insert into messages
        (sender_id, chat_id, content, reply_to_id, webhook_id, sender_name_override, sender_avatar_url_override)
        values ($1, $2, $3, $4, $5, $6, $7)
-       returning id, created_at`,
+       returning id`,
       [
         senderId,
         chatId,
         content,
-        replyTo ? replyTo.id : null,
+        replyTarget ? replyTarget.id : null,
         opts.webhookId || null,
         opts.senderNameOverride || null,
         opts.senderAvatarUrl || null
@@ -75,20 +70,15 @@ async function createAndBroadcastMessage(opts, db = pool) {
       attachmentRows.push(attachmentResult.rows[0]);
     }
 
+    const q = buildMessageByIdQuery(saved.id);
+    const fullRes = await client.query(q.text, q.params);
+    const row = fullRes.rows[0];
+
     payload = {
-      id: saved.id,
-      sender_id: senderId,
-      sender: senderUsername,
-      sender_display_name: senderDisplayName,
-      sender_avatar_url: opts.senderAvatarUrl || null,
-      sender_global_roles: senderGlobalRoles,
-      sender_is_bot: isSenderApp,
-      chat_id: chatId,
-      content: content,
-      created_at: saved.created_at,
-      reply_to_id: replyTo ? replyTo.id : null,
-      reply_to_sender: replyTo ? replyTo.sender : null,
-      reply_to_content: replyTo ? replyTo.content : null,
+      ...row,
+      sender: senderUsername || row.sender,
+      sender_display_name: opts.senderDisplayName || row.sender_display_name,
+      sender_is_bot: !!isSenderApp,
       attachments: attachmentRows.map((attachment) => ({
         id: attachment.id,
         name: attachment.original_name,
