@@ -3,81 +3,123 @@ const { pool } = require('../db');
 const { jwtSecret, emailVerificationRequired } = require('../config');
 const { hashAppToken } = require('../utils/tokens');
 
-async function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
+async function resolveModeration(userId) {
+  const r = await pool.query(
+    'select moderation_status, moderation_expires_at from users where id = $1',
+    [userId]
+  );
+  const row = r.rows[0];
+  if (!row) return null;
+
+  let status = row.moderation_status;
+  if (status === 3 && row.moderation_expires_at && new Date() > new Date(row.moderation_expires_at)) {
+    await pool.query(
+      'update users set moderation_status = 0, moderation_reason = null, moderation_expires_at = null, moderated_by = null where id = $1',
+      [userId]
+    );
+    status = 0;
+  }
+  return status;
+}
+
+function moderationBlock(status) {
+  if (status === 2) return 'Your account has been banned.';
+  if (status === 3) return 'Your account is currently suspended.';
+  return null;
+}
+
+async function authenticateCredentials(authHeader) {
   if (!authHeader) {
-    return res.status(401).json({ error: 'token required' });
+    return { status: 401, error: 'token required' };
   }
 
   if (authHeader.startsWith('App ')) {
     const token = authHeader.slice(4).trim();
-    if (!token) return res.status(401).json({ error: 'token required' });
+    if (!token) return { status: 401, error: 'token required' };
 
-    try {
-      const r = await pool.query(
-        `update app_tokens t
-            set last_used_at = now()
-           from users u
-          where t.token_hash = $1
-            and u.id = t.app_user_id
-            and u.is_bot = true
-        returning u.id, u.username`,
-        [hashAppToken(token)]
-      );
-      if (r.rowCount === 0) {
-        return res.status(401).json({ error: 'invalid token' });
-      }
-      req.user = {
-        id: r.rows[0].id,
-        username: r.rows[0].username,
-        isApp: true
-      };
-      return next();
-    } catch (e) {
-      console.error('failed to authenticate app token', e);
-      return res.status(500).json({ error: 'failed to authenticate' });
+    const r = await pool.query(
+      `update app_tokens t
+          set last_used_at = now()
+         from users u
+        where t.token_hash = $1
+          and u.id = t.app_user_id
+          and u.is_bot = true
+      returning u.id, u.username, u.app_owner_id`,
+      [hashAppToken(token)]
+    );
+    if (r.rowCount === 0) {
+      return { status: 401, error: 'invalid token' };
     }
+
+    const app = r.rows[0];
+    if (!app.app_owner_id) {
+      return { status: 401, error: 'invalid token' };
+    }
+
+    const [appStatus, ownerStatus] = await Promise.all([
+      resolveModeration(app.id),
+      resolveModeration(app.app_owner_id)
+    ]);
+    if (appStatus === null || ownerStatus === null) {
+      return { status: 401, error: 'invalid token' };
+    }
+
+    const blocked = moderationBlock(appStatus) || moderationBlock(ownerStatus);
+    if (blocked) {
+      return { status: 403, error: blocked };
+    }
+
+    if (!(await isUserEmailVerified(app.app_owner_id))) {
+      return { status: 403, error: 'the app owner must verify their email' };
+    }
+
+    return {
+      user: {
+        id: app.id,
+        username: app.username,
+        isApp: true,
+        appOwnerId: app.app_owner_id,
+        moderationStatus: appStatus === 1 || ownerStatus === 1 ? 1 : 0
+      }
+    };
   }
 
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) {
-    return res.status(401).json({ error: 'token required' });
+    return { status: 401, error: 'token required' };
   }
 
+  let payload;
   try {
-    const payload = jwt.verify(token, jwtSecret);
+    payload = jwt.verify(token, jwtSecret);
+  } catch (e) {
+    return { status: 401, error: 'invalid or expired token' };
+  }
 
-    const userRes = await pool.query(
-      'select moderation_status, moderation_expires_at from users where id = $1',
-      [payload.id]
-    );
-    const dbUser = userRes.rows[0];
-    if (!dbUser) {
-      return res.status(401).json({ error: 'user not found' });
+  const status = await resolveModeration(payload.id);
+  if (status === null) {
+    return { status: 401, error: 'user not found' };
+  }
+
+  const blocked = moderationBlock(status);
+  if (blocked) {
+    return { status: 403, error: blocked };
+  }
+
+  return { user: { ...payload, isApp: false, moderationStatus: status } };
+}
+
+async function authenticateToken(req, res, next) {
+  try {
+    const result = await authenticateCredentials(req.headers['authorization']);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
     }
-
-    let status = dbUser.moderation_status;
-    let expiresAt = dbUser.moderation_expires_at;
-
-    if (status === 3 && expiresAt && new Date() > new Date(expiresAt)) {
-      await pool.query(
-        'update users set moderation_status = 0, moderation_reason = null, moderation_expires_at = null, moderated_by = null where id = $1',
-        [payload.id]
-      );
-      status = 0;
-    }
-
-    if (status === 2) {
-      return res.status(403).json({ error: 'Your account has been banned.' });
-    }
-    if (status === 3) {
-      return res.status(403).json({ error: 'Your account is currently suspended.' });
-    }
-
-    req.user = { ...payload, isApp: false, moderationStatus: status };
+    req.user = result.user;
     next();
   } catch (e) {
-    return res.status(401).json({ error: 'invalid or expired token' });
+    console.error('failed to authenticate', e);
+    res.status(500).json({ error: 'failed to authenticate' });
   }
 }
 
@@ -220,6 +262,7 @@ async function requireAdmin(req, res, next) {
 }
 
 module.exports = {
+  authenticateCredentials,
   authenticateToken,
   blockApps,
   requireNotLimited,
