@@ -182,8 +182,8 @@ importers:
         specifier: ^9.0.2
         version: 9.0.3
       livekit-server-sdk:
-        specifier: ^2.19.1
-        version: 2.19.1
+        specifier: ^2.19.3
+        version: 2.19.3
       nodemailer:
         specifier: ^10.2.1
         version: 10.2.1
@@ -205,8 +205,8 @@ packages:
   '@levischuck/tiny-cbor@0.2.11':
     resolution: {integrity: sha512-llBRm4dT4Z89aRsm6u2oEZ8tfwL/2l6BwpZ7JcyieouniDECM5AqNgr/y08zalEIvW3RSK4upYyybDcmjXqAow==}
 
-  '@livekit/protocol@1.51.0':
-    resolution: {integrity: sha512-kEDEDaFvIcp5VlYBromdSKMJMEJKfPvXPfEaJPdEz1Qgo84gZAoLF2g58CcMlVYGsjrwE5XYgQxRS5B7KuEj3w==}
+  '@livekit/protocol@1.53.0':
+    resolution: {integrity: sha512-dM562Q7sEQbJ9ZghjIpcVuRxRApGNwJW/JfXRub+dJT8J1cC2Tep0SyYkDzOawix7+0x969fnjXt0qEZOxkjbQ==}
 
   '@peculiar/asn1-android@2.10.0':
     resolution: {integrity: sha512-IHKdYL5MRW76DOQCv2HSE/vUMOf2jqH4E7yhtQYe/xx+RxpPiXfkUdhex0N4/s5crsnXCGftRNzy4RJn1s6CZA==}
@@ -482,8 +482,8 @@ packages:
   jws@4.0.1:
     resolution: {integrity: sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA==}
 
-  livekit-server-sdk@2.19.1:
-    resolution: {integrity: sha512-tqjM5oPDDNBrkb/64YReta9UWP32l1a2m0HHXq8WOuEzwxh4zsaXjeZZtPG4Er4eVAk4kjR+EMxH7lPKzg1g6g==}
+  livekit-server-sdk@2.19.3:
+    resolution: {integrity: sha512-DRcTr/aU2759IW9aJRnM+fL3kRFbDuS7DSfwSRRP7NBByWbD58EsdGkzYFZa1Ka4g7ks1HPvEQaAmE5b6WHNPQ==}
     engines: {node: '>=19'}
 
   lodash.includes@4.3.0:
@@ -735,7 +735,7 @@ snapshots:
 
   '@levischuck/tiny-cbor@0.2.11': {}
 
-  '@livekit/protocol@1.51.0':
+  '@livekit/protocol@1.53.0':
     dependencies:
       '@bufbuild/protobuf': 1.10.1
 
@@ -1073,10 +1073,10 @@ snapshots:
       jwa: 2.0.1
       safe-buffer: 5.2.1
 
-  livekit-server-sdk@2.19.1:
+  livekit-server-sdk@2.19.3:
     dependencies:
       '@bufbuild/protobuf': 1.10.1
-      '@livekit/protocol': 1.51.0
+      '@livekit/protocol': 1.53.0
       jose: 5.10.0
 
   lodash.includes@4.3.0: {}
